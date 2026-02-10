@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import pandas as pd
 from sentence_transformers import SentenceTransformer
@@ -14,11 +15,16 @@ labels = ["IMAGE"] * len(image_texts) + ["TEXT"] * len(text_texts)
 
 emb = model.encode(texts, normalize_embeddings=True).astype("float16")
 
-np.savez_compressed(
-    "models/rAI-beta.npz",
-    embeddings=emb,
-    labels=np.array(labels),
-    texts=np.array(texts)
-)
+out = []
 
-print("saved rAI-beta.npz")
+for t, l, e in zip(texts, labels, emb):
+    out.append({
+        "text": t,
+        "label": l,
+        "embedding": e.tolist()
+    })
+
+with open("models/rAI-beta.json", "w") as f:
+    json.dump(out, f)
+
+print("saved models/rAI-beta.json")
