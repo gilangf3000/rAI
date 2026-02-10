@@ -1,40 +1,44 @@
-import json
 import numpy as np
 import pandas as pd
 from sentence_transformers import SentenceTransformer
 
-MODEL_NAME = "all-MiniLM-L6-v2"
-
-model = SentenceTransformer(MODEL_NAME)
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
 df = pd.read_excel("./datasets/rAI-beta.xlsx")
 
 image_texts = df["IMAGE"].dropna().tolist()
 text_texts = df["TEXT"].dropna().tolist()
 
-def encode(texts):
-    return model.encode(
-        texts,
-        normalize_embeddings=True
-    ).astype("float32")
+def augment(texts, n=2):
+    out = []
+    for t in texts:
+        out.append(t)
+        for _ in range(n):
+            out.append(t + " ")
+    return out
 
+image_texts = augment(image_texts, n=2)
+text_texts = augment(text_texts, n=2)
 
-img_emb = encode(image_texts)
-txt_emb = encode(text_texts)
+# pastikan dataset imbang
+len_img = len(image_texts)
+len_txt = len(text_texts)
 
-centroid_image = img_emb.mean(axis=0)
-centroid_text = txt_emb.mean(axis=0)
+if len_img > len_txt:
+    text_texts = np.random.choice(text_texts, size=len_img, replace=True).tolist()
+elif len_txt > len_img:
+    image_texts = np.random.choice(image_texts, size=len_txt, replace=True).tolist()
 
-out = {
-    "model": MODEL_NAME,
-    "labels": ["IMAGE", "TEXT"],
-    "centroids": {
-        "IMAGE": centroid_image.tolist(),
-        "TEXT": centroid_text.tolist()
-    }
-}
+texts = image_texts + text_texts
+labels = ["IMAGE"] * len(image_texts) + ["TEXT"] * len(text_texts)
 
-with open("models/rAI-beta.json", "w") as f:
-    json.dump(out, f)
+emb = model.encode(texts, normalize_embeddings=True).astype("float16")
 
-print("saved models/rAI-beta.json")
+np.savez_compressed(
+    "models/rai.npz",
+    embeddings=emb,
+    labels=np.array(labels),
+    texts=np.array(texts)
+)
+
+print("saved models/rai.npz")
