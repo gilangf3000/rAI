@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Body
 from pydantic import BaseModel
 from app.core.model import model
 from app.core.config import settings
+from app.core.schemas import PredictionLabel
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 
@@ -9,12 +10,12 @@ class PredictionRequest(BaseModel):
     text: str
 
 class PredictionResponse(BaseModel):
-    label: str
+    label: PredictionLabel
     confidence: float
 
 class FeedbackRequest(BaseModel):
     text: str
-    label: str # "IMAGE" or "TEXT"
+    label: PredictionLabel # Validates against Enum automatically
 
 class FeedbackResponse(BaseModel):
     status: str
@@ -30,11 +31,10 @@ def predict(request: PredictionRequest):
 
 @app.post("/feedback", response_model=FeedbackResponse)
 def feedback(request: FeedbackRequest):
-    if request.label not in ["IMAGE", "TEXT"]:
-        raise HTTPException(status_code=400, detail="Invalid label. Must be IMAGE or TEXT")
+    # Pydantic validates label is one of the Enum values
     
     try:
-        model.learn(request.text, request.label)
+        model.learn(request.text, request.label.value)
         return {"status": "learned"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

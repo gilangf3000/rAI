@@ -7,13 +7,31 @@ from sklearn.linear_model import SGDClassifier
 from sklearn.exceptions import NotFittedError
 
 from app.core.config import settings
+from app.core.schemas import PredictionLabel
 
 class ImageDetectionModel:
     def __init__(self):
         print(f"Loading embedding model: {settings.EMBEDDING_MODEL}")
-        self.encoder = SentenceTransformer(settings.EMBEDDING_MODEL)
+        # Explicitly use CPU to save GPU memory overhead if any, and for consistent quantization support
+        self.encoder = SentenceTransformer(settings.EMBEDDING_MODEL, device='cpu')
+        
+        # QUANTIZATION OPTIMIZATION for <1GB RAM
+        # Quantize the underlying transformer layers (Linear) to int8
+        try:
+            import torch
+            from torch.quantization import quantize_dynamic
+            print("Optimizing model for low RAM (Int8 Quantization)...")
+            # SentenceTransformer -> Transformer (0) -> AutoModel
+            self.encoder[0].auto_model = quantize_dynamic(
+                self.encoder[0].auto_model, 
+                {torch.nn.Linear}, 
+                dtype=torch.qint8
+            )
+        except Exception as e:
+            print(f"Quantization failed: {e}. Continuing with full precision.")
+
         self.classifier = SGDClassifier(loss='log_loss', random_state=42)
-        self.labels = ["TEXT", "IMAGE"]
+        self.labels = [label.value for label in PredictionLabel]
         self.model_path = settings.MODEL_PATH
         
         self.load_model()
